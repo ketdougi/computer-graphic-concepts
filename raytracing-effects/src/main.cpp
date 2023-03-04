@@ -209,8 +209,6 @@ double ray_sphere_intersection(const Vector3d &ray_origin, const Vector3d &ray_d
 
     double discriminant =  pow(B, 2) - (4*A*C);
 
-    //double t = -1;
-
     if (discriminant < 0)
     {
         return -1;
@@ -255,16 +253,22 @@ double ray_parallelogram_intersection(const Vector3d &ray_origin, const Vector3d
     const Vector3d pgram_u = A - pgram_origin;
     const Vector3d pgram_v = B - pgram_origin;
 
-    if (false)
+    double* result = parallelogram_intersect(pgram_u, pgram_v, ray_direction, pgram_origin, ray_origin);
+
+    double BB = result[0]; 
+    double l = result[1];
+    double t = result[2];
+
+    if ((BB > 1) || (l>1) || (t<0) || (l<0)  || (BB<0))
     {
         return -1;
     }
 
     //TODO set the correct intersection point, update p and N to the correct values
-    p = ray_origin;
-    N = p.normalized();
+    p = ray_origin + (t*ray_direction);
+    N = (p+pgram_v).cross(p+pgram_u).normalized();;
 
-    return -1;
+    return t;
 }
 
 //Finds the closest intersecting object returns its index
