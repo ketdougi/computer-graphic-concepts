@@ -199,17 +199,43 @@ double ray_sphere_intersection(const Vector3d &ray_origin, const Vector3d &ray_d
     const Vector3d sphere_center = sphere_centers[index];
     const double sphere_radius = sphere_radii[index];
 
-    double t = -1;
+    Vector3d e = ray_origin;
+    Vector3d d = ray_direction;
+    Vector3d c = sphere_center;
 
-    if (false)
+    double A = d.dot(d);
+    double B = 2*d.dot(e-c);
+    double C = (e-c).dot(e-c) - pow(sphere_radius, 2);
+
+    double discriminant =  pow(B, 2) - (4*A*C);
+
+    //double t = -1;
+
+    if (discriminant < 0)
     {
         return -1;
     }
     else
     {
         //TODO set the correct intersection point, update p to the correct value
-        p = ray_origin;
-        N = ray_direction;
+        double t;
+        double t1 = ((-1*B) + sqrt(discriminant)) / (2*A);
+        double t2 = ((-1*B) - sqrt(discriminant)) / (2*A);
+
+        Vector3d p1 = e + (t1*d);
+        Vector3d p2 = e + (t2*d);
+
+        double d1 = sqrt( pow((p1[0]-ray_origin[0]), 2) + pow((p1[1]-ray_origin[1]), 2) + pow((p1[2]-ray_origin[2]), 2));
+        double d2 = sqrt( pow((p2[0]-ray_origin[0]), 2) + pow((p2[1]-ray_origin[1]), 2) + pow((p2[2]-ray_origin[2]), 2));
+
+
+        if(d1<d2)
+            t = t1;
+        else
+            t = t2;
+            
+        p = e + (t*d);
+        N = (p-c).normalized();
 
         return t;
     }
