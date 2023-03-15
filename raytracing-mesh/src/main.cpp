@@ -171,22 +171,33 @@ double ray_triangle_intersection(const Vector3d &ray_origin, const Vector3d &ray
     const Vector3d pgram_u = b - a;
     const Vector3d pgram_v = c - a;
 
-    double* result = triangle_intersect(pgram_u, pgram_v, ray_direction, pgram_origin, ray_origin);
+    const Vector3d v1 = ray_direction.cross(pgram_v);
+    double det = pgram_u.dot(v1);
 
-    double B = result[0]; 
-    double l = result[1];
-    double t = result[2];
-
-    // the is intersect if t>0, 0<=u,v and u+v<=1
-    // no intersect if    t<0, 0> u,v and u+v>1
-    if ( (t<0)||(B<0)||(l<0)||((B+l)>1) )
-    {
+    if(det==0)
         return -1;
-    }
 
-    // set the correct intersection point, update p and N to the correct values
+    double inv = 1.0/det;
+
+    const Vector3d v2 = ray_origin - pgram_origin;
+    double u = inv * v2.dot(v1);
+
+    if( (u<0) || (u>1) )
+        return -1;
+
+    const Vector3d v3 = v2.cross(pgram_u);
+    double v = inv * ray_direction.dot(v3);
+    
+    if( (v<0) || ((u+v)>1) )
+        return -1; 
+
+    double t = inv * pgram_v.dot(v3);
+
+    if( t<0 )
+        return -1;
+    
     p = ray_origin + (t*ray_direction);
-    N = (p+pgram_v).cross(p+pgram_u).normalized();;
+    N = (pgram_v).cross(pgram_u).normalized();;
 
     return t;
 }
@@ -196,7 +207,7 @@ bool ray_box_intersection(const Vector3d &ray_origin, const Vector3d &ray_direct
     // TODO
     // Compute whether the ray intersects the given box.
     // we are not testing with the real surface here anyway.
-    return false;
+   return false;
 }
 
 //Finds the closest intersecting object returns its index
@@ -217,7 +228,7 @@ bool find_nearest_object(const Vector3d &ray_origin, const Vector3d &ray_directi
         double closest_t = std::numeric_limits<double>::max();
         bool intersects = false;
 
-        for( int i=0; i<facets.col(0).size(); i++ )
+        for( int i=0; i<facets.rows(); i++ )
         {
             const Vector3d a = vertices.row(facets(i, 0));
             const Vector3d b = vertices.row(facets(i, 1));
@@ -238,7 +249,7 @@ bool find_nearest_object(const Vector3d &ray_origin, const Vector3d &ray_directi
     else    
     // Method (2)
     {
-
+        return false;
     }
 }
 
