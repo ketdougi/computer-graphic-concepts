@@ -47,7 +47,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 const std::string data_dir = DATA_DIR;
 const std::string filename("raytrace.png");
-const std::string mesh_filename(data_dir + "dodeca.off");
+const std::string mesh_filename(data_dir + "dragon.off");
 
 //Camera settings
 const double focal_length = 2;
@@ -173,7 +173,7 @@ AlignedBox3d bbox_from_triangle(const Vector3d &a, const Vector3d &b, const Vect
     return box;
 }
 
-int AABB_helper(const MatrixXd &V, const MatrixXi &F, AABBTree* tree, std::vector<int> SS, MatrixXd centroids)
+int AABB_helper(const MatrixXd &V, const MatrixXi &F, AABBTree* tree, std::vector<int> SS, MatrixXd& centroids)
 {
     if(SS.size() == 1)
     {
