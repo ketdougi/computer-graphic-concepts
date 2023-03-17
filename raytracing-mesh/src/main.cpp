@@ -7,6 +7,7 @@
 #include <fstream>
 #include <algorithm>
 #include <numeric>
+#include <queue>
 
 // Utilities for the Assignment
 #include "utils.h"
@@ -137,10 +138,83 @@ AlignedBox3d bbox_from_triangle(const Vector3d &a, const Vector3d &b, const Vect
     return box;
 }
 
+int AABB_helper(const MatrixXd &V, const MatrixXi &F, AABBTree* tree, std::vector<int> SS, MatrixXd centroids)
+{
+    if(SS.size() == 1)
+    {
+        //leaf
+        int cur_ind = SS[0];
+        AABBTree::Node new_node;
+        new_node.bbox = bbox_from_triangle(V.row(F(cur_ind, 0)), V.row(F(cur_ind, 1)), V.row(F(cur_ind, 2)));
+        new_node.left = -1;
+        new_node.right = -1;
+        new_node.triangle = cur_ind; // Index of the node triangle (-1 for internal nodes)
+        tree->nodes.push_back(new_node);
+        return tree->nodes.size()-1;
+    }
+
+    // Split each set of primitives into 2 sets of roughly equal size,
+    // based on sorting the centroids along one direction or another.
+
+    int ind = 0;
+    double distance = 0;
+
+    MatrixXd cur_centroids(SS.size(), centroids.cols());
+    for(int i=0; i<SS.size(); i++)
+    {
+        cur_centroids.row(i) = centroids.row(SS[i]);
+    }
+
+    for( int i=0; i<3; i++)
+    {
+        double max = cur_centroids.col(i).maxCoeff();
+        double min = cur_centroids.col(i).minCoeff();
+
+        double cur_dist = max-min;
+        if(cur_dist>distance)
+        {
+            distance = cur_dist;
+            ind = i;
+        }
+    }
+
+    std::sort(SS.begin(), SS.end(), [&centroids, ind](int e1, int e2){ return centroids.col(ind)(e1)<centroids.col(ind)(e1); });
+
+    std::vector<int> S1;
+    std::vector<int> S2;
+    for(int i = 0; i < ceil(SS.size()/2); i++)
+    {
+        S1.push_back(SS[i]);
+    }
+
+    for(int i = ceil(SS.size()/2); i < SS.size(); i++)
+    {
+        S2.push_back(SS[i]);
+    }
+
+    int ind1 = AABB_helper(V, F, tree, S1, centroids);
+    int ind2 = AABB_helper(V, F, tree, S2, centroids);
+
+    AABBTree::Node new_node;
+    AlignedBox3d new_box;
+    new_box.extend(tree->nodes[ind1].bbox);
+    new_box.extend(tree->nodes[ind2].bbox);
+    new_node.bbox = new_box;
+    new_node.left = ind1;
+    new_node.right = ind2;
+    new_node.triangle = -1;
+    tree->nodes.push_back(new_node);
+
+    tree->nodes[ind1].parent = tree->nodes.size()-1;
+    tree->nodes[ind2].parent = tree->nodes.size()-1;
+
+    return tree->nodes.size()-1;
+}
+
 AABBTree::AABBTree(const MatrixXd &V, const MatrixXi &F)
 {
     // Compute the centroids of all the triangles in the input mesh
-    MatrixXd centroids(F.rows(), V.cols());
+     MatrixXd centroids(F.rows(), V.cols());
     centroids.setZero();
     for (int i = 0; i < F.rows(); ++i)
     {
@@ -151,10 +225,13 @@ AABBTree::AABBTree(const MatrixXd &V, const MatrixXi &F)
         centroids.row(i) /= F.cols();
     }
 
-    // TODO
+    std::vector<int> indices;
+    for(int i = 0; i < F.rows(); i++)
+        indices.push_back(i);
 
-    // Split each set of primitives into 2 sets of roughly equal size,
-    // based on sorting the centroids along one direction or another.
+    int root_ind = AABB_helper(V, F, this, indices, centroids);
+
+    this->root = root_ind;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -171,31 +248,21 @@ double ray_triangle_intersection(const Vector3d &ray_origin, const Vector3d &ray
     const Vector3d pgram_u = b - a;
     const Vector3d pgram_v = c - a;
 
-    const Vector3d v1 = ray_direction.cross(pgram_v);
-    double det = pgram_u.dot(v1);
+    Matrix3d AA;
+    AA.col(0) = pgram_u;
+    AA.col(1) = pgram_v;
+    AA.col(2) = -ray_direction;
 
-    if(det==0)
+    Vector3d bb = ray_origin - pgram_origin;//ray_direction - pgram_u;
+    Matrix3d A_inv = AA.inverse();
+    Vector3d x = A_inv*bb;
+    const double u = x[0], v = x[1], t = x[2];
+
+    if ((u > 1) || ((u+v)>1) || (t<0) || (u<0)  || (v<0))
+    {
         return -1;
+    }
 
-    double inv = 1.0/det;
-
-    const Vector3d v2 = ray_origin - pgram_origin;
-    double u = inv * v2.dot(v1);
-
-    if( (u<0) || (u>1) )
-        return -1;
-
-    const Vector3d v3 = v2.cross(pgram_u);
-    double v = inv * ray_direction.dot(v3);
-    
-    if( (v<0) || ((u+v)>1) )
-        return -1; 
-
-    double t = inv * pgram_v.dot(v3);
-
-    if( t<0 )
-        return -1;
-    
     p = ray_origin + (t*ray_direction);
     N = (pgram_v).cross(pgram_u).normalized();;
 
@@ -207,7 +274,27 @@ bool ray_box_intersection(const Vector3d &ray_origin, const Vector3d &ray_direct
     // TODO
     // Compute whether the ray intersects the given box.
     // we are not testing with the real surface here anyway.
-   return false;
+    double tmin = std::numeric_limits<double>::min(), tmax = std::numeric_limits<double>::max();
+
+    double tx1 = (box.min()[0]-ray_origin(0))/ray_direction(0);
+    double tx2 = (box.max()[0]-ray_origin(0))/ray_direction(0);
+
+    tmin = std::max(tmin, std::min(tx1, tx2));
+    tmax = std::min(tmax, std::max(tx1, tx2));
+
+    double ty1 = (box.min()[1]-ray_origin(1))/ray_direction(1);
+    double ty2 = (box.max()[1]-ray_origin(1))/ray_direction(1);
+
+    tmin = std::max(tmin, std::min(ty1, ty2));
+    tmax = std::min(tmax, std::max(ty1, ty2));
+
+    double tz1 = (box.min()[2]-ray_origin(2))/ray_direction(2);
+    double tz2 = (box.max()[2]-ray_origin(2))/ray_direction(2);
+
+    tmin = std::max(tmin, std::min(tz1, tz2));
+    tmax = std::min(tmax, std::max(tz1, tz2));
+
+    return (tmax >= tmin);
 }
 
 //Finds the closest intersecting object returns its index
@@ -215,7 +302,7 @@ bool ray_box_intersection(const Vector3d &ray_origin, const Vector3d &ray_direct
 bool find_nearest_object(const Vector3d &ray_origin, const Vector3d &ray_direction, Vector3d &p, Vector3d &N)
 {
     Vector3d tmp_p, tmp_N;
-    bool method1 = true;
+    bool method1 = false;
 
     // TODO
     // Method (1): Traverse every triangle and return the closest hit.
@@ -249,7 +336,43 @@ bool find_nearest_object(const Vector3d &ray_origin, const Vector3d &ray_directi
     else    
     // Method (2)
     {
-        return false;
+        double closest_t = std::numeric_limits<double>::max();
+        bool intersects = false;
+
+        std::queue<int> queue;
+        queue.push(bvh.root);
+
+        while(!queue.empty())
+        {
+            int cur_ind = queue.front();
+            queue.pop();
+
+            AABBTree::Node cur_node = bvh.nodes[cur_ind];
+            if(cur_node.triangle == -1)
+            {
+                bool result = ray_box_intersection(ray_origin, ray_direction, cur_node.bbox);
+                if(result)
+                {
+                    queue.push(cur_node.left);
+                    queue.push(cur_node.right);
+                }
+            }
+            else
+            {
+                const Vector3d a = vertices.row(facets(cur_node.triangle, 0));
+                const Vector3d b = vertices.row(facets(cur_node.triangle, 1));
+                const Vector3d c = vertices.row(facets(cur_node.triangle, 2));
+                const double t = ray_triangle_intersection(ray_origin, ray_direction, a, b, c, tmp_p, tmp_N);
+                if( (t>=0) && (t<closest_t) )
+                {
+                    closest_t = t;
+                    p = tmp_p;
+                    N = tmp_N;
+                    intersects = true;
+                }
+            } 
+        }
+        return intersects;
     }
 }
 
