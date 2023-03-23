@@ -52,5 +52,5 @@ public:
 class UniformAttributes
 {
 public:
-    Eigen::Matrix4f view;
+    Eigen::Matrix4d view;
 };
