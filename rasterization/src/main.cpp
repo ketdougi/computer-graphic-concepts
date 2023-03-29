@@ -99,15 +99,52 @@ void setup_scene()
 
 void build_uniform(UniformAttributes &uniform)
 {
+    double image_y = sin(field_of_view/2)*near_plane/cos(field_of_view/2);
+    double image_x = image_y*aspect_ratio;
     //TODO: setup uniform
+    
+    uniform.view << 1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1;
+    
+    /*if (aspect_ratio < 1)
+        uniform.view(0, 0) = aspect_ratio;
+    else
+        uniform.view(1, 1) = 1/aspect_ratio;*/
 
     //TODO: setup camera, compute w, u, v
 
+    Vector3d w = -camera_gaze/camera_gaze.norm();
+    Vector3d u = camera_top.cross(w) / (camera_top.cross(w)).norm();
+    Vector3d v = w.cross(u);
+    
     //TODO: compute the camera transformation
+    Matrix4d cam = Matrix4d(4, 4);
+
+    cam.row(0) << u[0], v[0], w[0], camera_position[0];
+    cam.row(1) << u[1], v[1], w[1], camera_position[1];
+    cam.row(2) << u[2], v[2], w[2], camera_position[2];
+    cam.row(3) << 0, 0, 0, 1;
+
+    uniform.camera = Matrix4d(4, 4);
+    uniform.camera = cam.inverse();
 
     //TODO: setup projection matrix
+    double t = image_y;    //top
+    double b = -image_y;  //bottom
+    
+    double r = image_x;   //right
+    double l = -image_x;  //left
+    
+    double f = -far_plane; //far
+    double n = -near_plane; //near
 
-    Matrix4d P;
+    uniform.projection.row(0) << 2/(r-l), 0, 0, -(r+l)/(r-l);
+    uniform.projection.row(1) << 0, 2/(t-b), 0, -(t+b)/(t-b); //made taller
+    uniform.projection.row(2) << 0, 0, 2/(n-f), -(n+f)/(n-f);
+    uniform.projection.row(3) << 0, 0, 0, 1;
+
     if (is_perspective)
     {
         //TODO setup prespective camera
@@ -125,7 +162,9 @@ void simple_render(Eigen::Matrix<FrameBufferAttributes, Eigen::Dynamic, Eigen::D
 
     program.VertexShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: fill the shader
-        return va;
+        VertexAttributes out;
+        out.position = uniform.view * uniform.projection * uniform.camera * va.position;
+        return out;
     };
 
     program.FragmentShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
@@ -140,6 +179,16 @@ void simple_render(Eigen::Matrix<FrameBufferAttributes, Eigen::Dynamic, Eigen::D
 
     std::vector<VertexAttributes> vertex_attributes;
     //TODO: build the vertex attributes from vertices and facets
+    for( int i=0; i<facets.rows(); i++ )
+    {
+        //  vertex_attributes.push_back( VertexAttributes(vertices.row(facets(i, 0))) );
+        VectorXd a = vertices.row(facets(i, 0));
+        VectorXd b = vertices.row(facets(i, 1));
+        VectorXd c = vertices.row(facets(i, 2));
+        vertex_attributes.push_back(a);
+        vertex_attributes.push_back(b);
+        vertex_attributes.push_back(c);
+    }
 
     rasterize_triangles(program, uniform, vertex_attributes, frameBuffer);
 }

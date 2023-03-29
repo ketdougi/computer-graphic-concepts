@@ -10,6 +10,8 @@ public:
         position << x, y, z, w;
     }
 
+    VertexAttributes(Eigen::VectorXd v) : VertexAttributes(v[0], v[1], v[2]){}
+
     // Interpolates the vertex attributes
     static VertexAttributes interpolate(
         const VertexAttributes &a,
@@ -52,4 +54,7 @@ public:
 class UniformAttributes
 {
 public:
+    Eigen::Matrix4d view;
+    Eigen::Matrix4d camera;
+    Eigen::Matrix4d projection;
 };
