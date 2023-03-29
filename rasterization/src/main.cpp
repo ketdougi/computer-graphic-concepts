@@ -211,7 +211,9 @@ void wireframe_render(const double alpha, Eigen::Matrix<FrameBufferAttributes, E
 
     program.VertexShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: fill the shader
-        return va;
+        VertexAttributes out;
+        out.position = uniform.view * uniform.projection * uniform.camera * va.position;
+        return out;
     };
 
     program.FragmentShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
@@ -227,6 +229,19 @@ void wireframe_render(const double alpha, Eigen::Matrix<FrameBufferAttributes, E
     std::vector<VertexAttributes> vertex_attributes;
 
     //TODO: generate the vertex attributes for the edges and rasterize the lines
+    for( int i=0; i<facets.rows(); i++ )
+    {
+        //  vertex_attributes.push_back( VertexAttributes(vertices.row(facets(i, 0))) );
+        VectorXd a = vertices.row(facets(i, 0));
+        VectorXd b = vertices.row(facets(i, 1));
+        VectorXd c = vertices.row(facets(i, 2));
+        vertex_attributes.push_back(a);
+        vertex_attributes.push_back(b);
+        vertex_attributes.push_back(b);
+        vertex_attributes.push_back(c);
+        vertex_attributes.push_back(c);
+        vertex_attributes.push_back(a);
+    }
     //TODO: use the transformation matrix
 
     rasterize_lines(program, uniform, vertex_attributes, 0.5, frameBuffer);
@@ -296,6 +311,7 @@ int main(int argc, char *argv[])
     framebuffer_to_uint8(frameBuffer, image);
     stbi_write_png("simple.png", frameBuffer.rows(), frameBuffer.cols(), 4, image.data(), frameBuffer.rows() * 4);
 
+    frameBuffer = Eigen::Matrix<FrameBufferAttributes, Eigen::Dynamic, Eigen::Dynamic>::Zero(W,H);
     wireframe_render(0, frameBuffer);
     framebuffer_to_uint8(frameBuffer, image);
     stbi_write_png("wireframe.png", frameBuffer.rows(), frameBuffer.cols(), 4, image.data(), frameBuffer.rows() * 4);
