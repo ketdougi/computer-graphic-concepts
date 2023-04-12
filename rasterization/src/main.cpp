@@ -181,7 +181,6 @@ void simple_render(Eigen::Matrix<FrameBufferAttributes, Eigen::Dynamic, Eigen::D
     //TODO: build the vertex attributes from vertices and facets
     for( int i=0; i<facets.rows(); i++ )
     {
-        //  vertex_attributes.push_back( VertexAttributes(vertices.row(facets(i, 0))) );
         VectorXd a = vertices.row(facets(i, 0));
         VectorXd b = vertices.row(facets(i, 1));
         VectorXd c = vertices.row(facets(i, 2));
@@ -231,7 +230,6 @@ void wireframe_render(const double alpha, Eigen::Matrix<FrameBufferAttributes, E
     //TODO: generate the vertex attributes for the edges and rasterize the lines
     for( int i=0; i<facets.rows(); i++ )
     {
-        //  vertex_attributes.push_back( VertexAttributes(vertices.row(facets(i, 0))) );
         VectorXd a = vertices.row(facets(i, 0));
         VectorXd b = vertices.row(facets(i, 1));
         VectorXd c = vertices.row(facets(i, 2));
@@ -252,17 +250,56 @@ void get_shading_program(Program &program)
     program.VertexShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: transform the position and the normal
         //TODO: compute the correct lighting
-        return va;
+        VertexAttributes out;
+        out.position = uniform.view * uniform.projection * uniform.camera * va.position;
+        out.normal   = va.normal;
+        //TODO: create the correct fragment
+        Vector4d lights_color(0, 0, 0, 1);
+
+        const Vector3d normal   = Vector3d(va.normal[0],   va.normal[1],   va.normal[2]);
+        const Vector3d position = Vector3d(va.position[0], va.position[1], va.position[2]);
+        
+        for (int i = 0; i < light_positions.size(); ++i)
+        {
+            const Vector3d &light_position = light_positions[i];
+            const Vector4d &light_color = Vector4d(light_colors[i][0], light_colors[i][1], light_colors[i][2], 0);
+
+            const Vector3d Li = (light_position - position).normalized();
+            const Vector3d Hi = (Li - camera_position).normalized();
+
+            Vector4d spec_color = Vector4d(obj_specular_color[0], obj_specular_color[1], obj_specular_color[2], 0);
+            Vector4d diff_color = Vector4d(obj_diffuse_color[0], obj_diffuse_color[1], obj_diffuse_color[2], 0);
+
+            const Vector4d specular = spec_color * std::pow(std::max(normal.dot(Hi), 0.0), obj_specular_exponent);
+            const Vector4d diffuse  = diff_color * std::max(Li.dot(normal), 0.0);
+
+            const Vector3d D = light_position - position;
+            
+            lights_color += (diffuse + specular).cwiseProduct(light_color) / D.squaredNorm();
+
+        }
+        out.color = lights_color;
+
+        return out;
     };
 
     program.FragmentShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: create the correct fragment
-        return FragmentAttributes(1, 0, 0);
+        FragmentAttributes out(va.color[0], va.color[1], va.color[2], va.color[3]);
+        out.position       = Vector4d(va.position[0], va.position[1], -1*va.position[2], va.position[3]);
+        return out;
     };
 
     program.BlendingShader = [](const FragmentAttributes &fa, const FrameBufferAttributes &previous) {
         //TODO: implement the depth check
-        return FrameBufferAttributes(fa.color[0] * 255, fa.color[1] * 255, fa.color[2] * 255, fa.color[3] * 255);
+        if (fa.position[2] < previous.depth)
+        {
+            FrameBufferAttributes out(fa.color[0] * 255, fa.color[1] * 255, fa.color[2] * 255, fa.color[3] * 255);
+            out.depth = fa.position[2];
+            return out;
+        }
+        else
+            return previous;
     };
 }
 
@@ -275,6 +312,25 @@ void flat_shading(const double alpha, Eigen::Matrix<FrameBufferAttributes, Eigen
     Eigen::Matrix4d trafo = compute_rotation(alpha);
 
     std::vector<VertexAttributes> vertex_attributes;
+    for( int i=0; i<facets.rows(); i++ )
+    {
+        VectorXd a = vertices.row(facets(i, 0));
+        VectorXd b = vertices.row(facets(i, 1));
+        VectorXd c = vertices.row(facets(i, 2));
+
+        Vector3d e1 = b-a;
+        Vector3d e2 = c-a;
+        Vector3d n0 = e1.cross(e2).normalized();
+        Vector4d n  = Vector4d(n0[0], n0[1], n0[2], 0);
+
+        VertexAttributes a_VA = VertexAttributes(a, n);
+        VertexAttributes b_VA = VertexAttributes(b, n);
+        VertexAttributes c_VA = VertexAttributes(c, n);
+
+        vertex_attributes.push_back(a_VA);
+        vertex_attributes.push_back(b_VA);
+        vertex_attributes.push_back(c_VA);
+    }
     //TODO: compute the normals
     //TODO: set material colors
 
@@ -291,9 +347,54 @@ void pv_shading(const double alpha, Eigen::Matrix<FrameBufferAttributes, Eigen::
     Eigen::Matrix4d trafo = compute_rotation(alpha);
 
     //TODO: compute the vertex normals as vertex normal average
+    std::vector<Vector4d> vertex_normals[vertices.size()];
+
+    for( int i=0; i<facets.rows(); i++ )
+    {
+        VectorXd a = vertices.row(facets(i, 0));
+        VectorXd b = vertices.row(facets(i, 1));
+        VectorXd c = vertices.row(facets(i, 2));
+
+        Vector3d e1 = b-a;
+        Vector3d e2 = c-a;
+        Vector3d n0 = e1.cross(e2).normalized();
+        Vector4d n  = Vector4d(n0[0], n0[1], n0[2], 0);
+
+        vertex_normals[facets(i, 0)].push_back(n);
+        vertex_normals[facets(i, 1)].push_back(n);
+        vertex_normals[facets(i, 2)].push_back(n);
+    }
+
 
     std::vector<VertexAttributes> vertex_attributes;
     //TODO: create vertex attributes
+
+    for( int i=0; i<facets.rows(); i++ )
+    {
+        VectorXd a = vertices.row(facets(i, 0));
+        VectorXd b = vertices.row(facets(i, 1));
+        VectorXd c = vertices.row(facets(i, 2));
+
+        Vector4d v_normal[3];
+        for(int j=0; j<3; j++)
+        {
+            for(Vector4d n : vertex_normals[facets(i, j)])
+            {
+                v_normal[j] += n;
+            }
+            v_normal[j] /= vertex_normals[facets(i, j)].size();
+            v_normal[j] = v_normal[j].normalized();
+        }
+
+        VertexAttributes a_VA = VertexAttributes(a, v_normal[0]);
+        VertexAttributes b_VA = VertexAttributes(b, v_normal[1]);
+        VertexAttributes c_VA = VertexAttributes(c, v_normal[2]);
+
+        vertex_attributes.push_back(a_VA);
+        vertex_attributes.push_back(b_VA);
+        vertex_attributes.push_back(c_VA);
+    }
+
     //TODO: set material colors
 
     rasterize_triangles(program, uniform, vertex_attributes, frameBuffer);
@@ -316,10 +417,12 @@ int main(int argc, char *argv[])
     framebuffer_to_uint8(frameBuffer, image);
     stbi_write_png("wireframe.png", frameBuffer.rows(), frameBuffer.cols(), 4, image.data(), frameBuffer.rows() * 4);
 
+    frameBuffer = Eigen::Matrix<FrameBufferAttributes, Eigen::Dynamic, Eigen::Dynamic>::Zero(W,H);
     flat_shading(0, frameBuffer);
     framebuffer_to_uint8(frameBuffer, image);
     stbi_write_png("flat_shading.png", frameBuffer.rows(), frameBuffer.cols(), 4, image.data(), frameBuffer.rows() * 4);
 
+    frameBuffer = Eigen::Matrix<FrameBufferAttributes, Eigen::Dynamic, Eigen::Dynamic>::Zero(W,H);
     pv_shading(0, frameBuffer);
     framebuffer_to_uint8(frameBuffer, image);
     stbi_write_png("pv_shading.png", frameBuffer.rows(), frameBuffer.cols(), 4, image.data(), frameBuffer.rows() * 4);

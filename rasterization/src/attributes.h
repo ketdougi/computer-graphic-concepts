@@ -12,6 +12,11 @@ public:
 
     VertexAttributes(Eigen::VectorXd v) : VertexAttributes(v[0], v[1], v[2]){}
 
+    VertexAttributes(Eigen::VectorXd v, Eigen::Vector4d n) : VertexAttributes(v[0], v[1], v[2])
+    {
+        normal = n;
+    }
+
     // Interpolates the vertex attributes
     static VertexAttributes interpolate(
         const VertexAttributes &a,
@@ -22,11 +27,16 @@ public:
         const double gamma)
     {
         VertexAttributes r;
-        r.position = alpha * a.position + beta * b.position + gamma * c.position;
+        r.position  = alpha * a.position + beta * b.position + gamma * c.position;
+        r.color     = 3*(alpha * a.color + beta * b.color + gamma * c.color);
+        r.normal = alpha * a.normal + beta * b.normal + gamma * c.normal;
+
         return r;
     }
 
     Eigen::Vector4d position;
+    Eigen::Vector4d normal;
+    Eigen::Vector4d color;
 };
 
 class FragmentAttributes
@@ -38,6 +48,7 @@ public:
     }
 
     Eigen::Vector4d color;
+    Eigen::Vector4d position;
 };
 
 class FrameBufferAttributes
@@ -46,8 +57,11 @@ public:
     FrameBufferAttributes(uint8_t r = 0, uint8_t g = 0, uint8_t b = 0, uint8_t a = 255)
     {
         color << r, g, b, a;
+        depth = 100000;
     }
-
+    
+    double depth;
+    Eigen::Matrix<uint8_t, 4, 1> positions;
     Eigen::Matrix<uint8_t, 4, 1> color;
 };
 
