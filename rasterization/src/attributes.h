@@ -28,8 +28,8 @@ public:
     {
         VertexAttributes r;
         r.position  = alpha * a.position + beta * b.position + gamma * c.position;
-        r.color     = 2*(alpha * a.color + beta * b.color + gamma * c.color);
-        r.normal = alpha * a.normal + beta * b.normal + gamma * c.normal;
+        r.color     = alpha * a.color    + beta * b.color    + gamma * c.color;
+        r.normal    = alpha * a.normal   + beta * b.normal   + gamma * c.normal;
 
         return r;
     }

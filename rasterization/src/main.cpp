@@ -275,26 +275,28 @@ void get_shading_program(Program &program)
         //TODO: compute the correct lighting
         VertexAttributes out;
         out.position = uniform.projection * uniform.perspective * uniform.camera * uniform.trafo * va.position;
-        out.normal   = va.normal;
+        out.normal   = uniform.trafo * va.normal;
         //TODO: create the correct fragment
         Vector4d lights_color(0, 0, 0, 1);
 
-        const Vector3d normal   = Vector3d(va.normal[0],   va.normal[1],   va.normal[2]);
-        const Vector3d position = Vector3d(va.position[0], va.position[1], va.position[2]);
+        const Vector3d normal   = Vector3d(out.normal[0],   out.normal[1],   out.normal[2]);
+        const Vector3d position = Vector3d(out.position[0], out.position[1], out.position[2]);
         
         for (int i = 0; i < light_positions.size(); ++i)
         {
             const Vector3d &light_position = light_positions[i];
             const Vector4d &light_color = Vector4d(light_colors[i][0], light_colors[i][1], light_colors[i][2], 0);
 
+            // diffuse
             const Vector3d Li = (light_position - position).normalized();
-            const Vector3d Hi = (Li - camera_position).normalized();
-
-            Vector4d spec_color = Vector4d(obj_specular_color[0], obj_specular_color[1], obj_specular_color[2], 0);
             Vector4d diff_color = Vector4d(obj_diffuse_color[0], obj_diffuse_color[1], obj_diffuse_color[2], 0);
-
-            const Vector4d specular = spec_color * std::pow(std::max(normal.dot(Hi), 0.0), obj_specular_exponent);
             const Vector4d diffuse  = diff_color * std::max(Li.dot(normal), 0.0);
+
+            //specular
+            Vector3d v = (camera_position - position).normalized(); 
+            const Vector3d Hi = ((Li + v) / (Li + v).norm()).normalized();
+            Vector4d spec_color = Vector4d(obj_specular_color[0], obj_specular_color[1], obj_specular_color[2], 0);
+            const Vector4d specular = spec_color * std::pow(std::max(Hi.dot(normal), 0.0), obj_specular_exponent);
 
             const Vector3d D = light_position - position;
             
@@ -302,6 +304,9 @@ void get_shading_program(Program &program)
 
         }
         out.color = lights_color;
+        out.color[0] += ambient_light[0];
+        out.color[1] += ambient_light[1];
+        out.color[2] += ambient_light[2];
 
         return out;
     };
