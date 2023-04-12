@@ -197,6 +197,20 @@ Matrix4d compute_rotation(const double alpha)
     //TODO: Compute the rotation matrix of angle alpha on the y axis around the object barycenter
     Matrix4d res;
 
+    if(alpha == 0)
+    {
+        res  << 1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1;
+        return res;
+    }
+
+    res  << cos(alpha),  0, sin(alpha), 0,
+            0,           1, 0,          0,
+            -sin(alpha), 0, cos(alpha), 0,
+            0,           0, 0,          1;
+
     return res;
 }
 
@@ -207,11 +221,12 @@ void wireframe_render(const double alpha, Eigen::Matrix<FrameBufferAttributes, E
     Program program;
 
     Matrix4d trafo = compute_rotation(alpha);
+    uniform.trafo = trafo;
 
     program.VertexShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: fill the shader
         VertexAttributes out;
-        out.position = uniform.view * uniform.projection * uniform.camera * va.position;
+        out.position = uniform.view * uniform.projection * uniform.camera * uniform.trafo * va.position;
         return out;
     };
 
@@ -251,7 +266,7 @@ void get_shading_program(Program &program)
         //TODO: transform the position and the normal
         //TODO: compute the correct lighting
         VertexAttributes out;
-        out.position = uniform.view * uniform.projection * uniform.camera * va.position;
+        out.position = uniform.view * uniform.projection * uniform.camera * uniform.trafo * va.position;
         out.normal   = va.normal;
         //TODO: create the correct fragment
         Vector4d lights_color(0, 0, 0, 1);
@@ -310,6 +325,7 @@ void flat_shading(const double alpha, Eigen::Matrix<FrameBufferAttributes, Eigen
     Program program;
     get_shading_program(program);
     Eigen::Matrix4d trafo = compute_rotation(alpha);
+    uniform.trafo = trafo;
 
     std::vector<VertexAttributes> vertex_attributes;
     for( int i=0; i<facets.rows(); i++ )
@@ -345,6 +361,7 @@ void pv_shading(const double alpha, Eigen::Matrix<FrameBufferAttributes, Eigen::
     get_shading_program(program);
 
     Eigen::Matrix4d trafo = compute_rotation(alpha);
+    uniform.trafo = trafo;
 
     //TODO: compute the vertex normals as vertex normal average
     std::vector<Vector4d> vertex_normals[vertices.size()];
@@ -428,6 +445,42 @@ int main(int argc, char *argv[])
     stbi_write_png("pv_shading.png", frameBuffer.rows(), frameBuffer.cols(), 4, image.data(), frameBuffer.rows() * 4);
 
     //TODO: add the animation
+    int delay = 25;
+    double pi = 3.14159265;
+    GifWriter g;
+    
+    GifBegin(&g, "wireframe.gif", frameBuffer.rows(), frameBuffer.cols(), delay);
 
+    for(double i=0; i<1; i+=0.05)
+    {
+        frameBuffer.setConstant(FrameBufferAttributes());
+        wireframe_render(i*2*pi, frameBuffer);
+        framebuffer_to_uint8(frameBuffer, image);
+        GifWriteFrame(&g, image.data(), frameBuffer.rows(), frameBuffer.cols(), delay);
+    }
+    GifEnd(&g);
+
+    GifBegin(&g, "flat_shading.gif", frameBuffer.rows(), frameBuffer.cols(), delay);
+
+    for(double i=0; i<1; i+=0.05)
+    {
+        frameBuffer.setConstant(FrameBufferAttributes());
+        flat_shading(i*2*pi, frameBuffer);
+        framebuffer_to_uint8(frameBuffer, image);
+        GifWriteFrame(&g, image.data(), frameBuffer.rows(), frameBuffer.cols(), delay);
+    }
+    GifEnd(&g);
+
+    GifBegin(&g, "pv_shading.gif", frameBuffer.rows(), frameBuffer.cols(), delay);
+
+    for(double i=0; i<1; i+=0.05)
+    {
+        frameBuffer.setConstant(FrameBufferAttributes());
+        pv_shading(i*2*pi, frameBuffer);
+        framebuffer_to_uint8(frameBuffer, image);
+        GifWriteFrame(&g, image.data(), frameBuffer.rows(), frameBuffer.cols(), delay);
+    }
+    GifEnd(&g);
+    
     return 0;
 }

@@ -59,7 +59,7 @@ public:
         color << r, g, b, a;
         depth = 100000;
     }
-    
+
     double depth;
     Eigen::Matrix<uint8_t, 4, 1> positions;
     Eigen::Matrix<uint8_t, 4, 1> color;
@@ -71,4 +71,5 @@ public:
     Eigen::Matrix4d view;
     Eigen::Matrix4d camera;
     Eigen::Matrix4d projection;
+    Eigen::Matrix4d trafo;
 };
