@@ -28,7 +28,7 @@ public:
     {
         VertexAttributes r;
         r.position  = alpha * a.position + beta * b.position + gamma * c.position;
-        r.color     = 3*(alpha * a.color + beta * b.color + gamma * c.color);
+        r.color     = 2*(alpha * a.color + beta * b.color + gamma * c.color);
         r.normal = alpha * a.normal + beta * b.normal + gamma * c.normal;
 
         return r;
@@ -71,5 +71,6 @@ public:
     Eigen::Matrix4d view;
     Eigen::Matrix4d camera;
     Eigen::Matrix4d projection;
+    Eigen::Matrix4d perspective;
     Eigen::Matrix4d trafo;
 };

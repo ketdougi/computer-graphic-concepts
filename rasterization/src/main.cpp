@@ -108,10 +108,10 @@ void build_uniform(UniformAttributes &uniform)
                     0, 0, 1, 0,
                     0, 0, 0, 1;
     
-    /*if (aspect_ratio < 1)
+    if (aspect_ratio < 1)
         uniform.view(0, 0) = aspect_ratio;
     else
-        uniform.view(1, 1) = 1/aspect_ratio;*/
+        uniform.view(1, 1) = 1/aspect_ratio;
 
     //TODO: setup camera, compute w, u, v
 
@@ -148,9 +148,17 @@ void build_uniform(UniformAttributes &uniform)
     if (is_perspective)
     {
         //TODO setup prespective camera
+        uniform.perspective  << n, 0, 0, 0,
+                                0, n, 0, 0,
+                                0, 0, (n+f), -f*n,
+                                0, 0, 1, 0;
     }
     else
     {
+        uniform.perspective  << 1, 0, 0, 0,
+                                0, 1, 0, 0,
+                                0, 0, 1, 0,
+                                0, 0, 0, 1;
     }
 }
 
@@ -163,7 +171,7 @@ void simple_render(Eigen::Matrix<FrameBufferAttributes, Eigen::Dynamic, Eigen::D
     program.VertexShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: fill the shader
         VertexAttributes out;
-        out.position = uniform.view * uniform.projection * uniform.camera * va.position;
+        out.position = uniform.projection * uniform.perspective * uniform.camera * va.position;
         return out;
     };
 
@@ -226,7 +234,7 @@ void wireframe_render(const double alpha, Eigen::Matrix<FrameBufferAttributes, E
     program.VertexShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: fill the shader
         VertexAttributes out;
-        out.position = uniform.view * uniform.projection * uniform.camera * uniform.trafo * va.position;
+        out.position = uniform.projection * uniform.perspective * uniform.camera * uniform.trafo * va.position;
         return out;
     };
 
@@ -266,7 +274,7 @@ void get_shading_program(Program &program)
         //TODO: transform the position and the normal
         //TODO: compute the correct lighting
         VertexAttributes out;
-        out.position = uniform.view * uniform.projection * uniform.camera * uniform.trafo * va.position;
+        out.position = uniform.projection * uniform.perspective * uniform.camera * uniform.trafo * va.position;
         out.normal   = va.normal;
         //TODO: create the correct fragment
         Vector4d lights_color(0, 0, 0, 1);
@@ -301,7 +309,10 @@ void get_shading_program(Program &program)
     program.FragmentShader = [](const VertexAttributes &va, const UniformAttributes &uniform) {
         //TODO: create the correct fragment
         FragmentAttributes out(va.color[0], va.color[1], va.color[2], va.color[3]);
-        out.position       = Vector4d(va.position[0], va.position[1], -1*va.position[2], va.position[3]);
+        if(is_perspective)
+            out.position       = Vector4d(va.position[0], va.position[1], va.position[2], va.position[3]);
+        else
+            out.position       = Vector4d(va.position[0], va.position[1], -1*va.position[2], va.position[3]);
         return out;
     };
 
